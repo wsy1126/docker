@@ -1,0 +1,90 @@
+services:
+  # 数据库，存储应用数据
+  mssql:
+    build:
+      context: ./sqlserver
+    hostname: mssql
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: Nuctech123
+      MSSQL_PID: Standard
+    ports:
+      - "11433:1433"
+    restart: on-failure
+    volumes:
+      - mssql-data:/data
+  # api网关需要
+  redis:
+    image: redis:6.2-alpine
+    hostname: redis
+    ports:
+      - "16379:6379"
+    restart: always
+  # 用于存储nacos数据
+  mysql:
+    hostname: mysql
+    build:
+      context: ./mysql
+    image: mysql
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: Nuctech123
+    ports:
+      - "13306:3306"
+    restart: always
+    volumes:
+      - mysql-data:/var/lib/mysql
+  # 用于存储配置和注册中心
+  nacos:
+    hostname: nacos
+    image: nacos/nacos-server:v2.1.1
+    environment:
+      PREFER_HOMST_MODE: hostname
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql
+      MYSQL_SERVICE_DB_NAME: nacos
+      MYSQL_SERVICE_USER: root
+      MYSQL_SERVICE_PASSWORD: Nuctech123
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      JVM_XMN: 256m
+    restart: always
+    ports:
+      - "18848:8848"
+    depends_on:
+      mysql:
+        condition: service_healthy
+  # 网关
+  api:
+    hostname: api
+    build:
+      context: ./api
+    depends_on:
+      nacos:
+        condition: service_started
+      redis:
+        condition: service_started
+    restart: on-failure
+    ports:
+      - "18888:8888"
+  # upms web容器
+  tomcat:
+    hostname: tomcat
+    build:
+      context: ./tomcat
+    restart: always
+    ports:
+      - "18080:8080"
+    volumes:
+      - tomcat-log:/usr/local/tomcat/log
+    depends_on:
+      mssql:
+        condition: service_started
+      redis:
+        condition: service_started
+  
+volumes:
+  mssql-data:
+  mysql-data:
+  tomcat-log:
